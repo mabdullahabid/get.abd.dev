@@ -1,3 +1,4 @@
+sudo apt install wget
 sudo mkdir /usr/src/shared
 sudo chmod 777 /usr/src/shared
 cd /usr/src/shared
