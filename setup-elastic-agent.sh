@@ -1,7 +1,4 @@
 sudo apt install wget
-sudo mkdir /usr/src/shared
-sudo chmod 777 /usr/src/shared
-cd /usr/src/shared
 wget https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-7.16.3-linux-x86_64.tar.gz
 tar zxvf elastic-agent-7.16.3-linux-x86_64.tar.gz
 cd elastic-agent-7.16.3-linux-x86_64
