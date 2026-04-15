@@ -28,18 +28,7 @@ backup_file() {
   warn "Backed up existing $f → $f.backup-$ts"
 }
 
-# ───────────────────────────────────────────── prerequisites
-
-info "Checking prerequisites"
-for bin in curl git; do
-  if ! need "$bin"; then
-    err "'$bin' is required but not installed. Install it and re-run."
-    exit 1
-  fi
-done
-ok "curl, git present"
-
-# ───────────────────────────────────────────── detect OS + install zsh
+# ───────────────────────────────────────────── detect OS
 
 detect_os() {
   case "$(uname -s)" in
@@ -63,39 +52,65 @@ detect_os() {
 OS="$(detect_os)"
 info "Detected system: $OS"
 
-install_zsh() {
+# ───────────────────────────────────────────── prerequisites (curl, git, zsh)
+#
+# Any of these may be missing on a fresh ubuntu container. Prompt once
+# (default Yes) and install via the platform package manager.
+
+APT_UPDATED=0
+pkg_install() {
+  local pkg="$1"
   case "$OS" in
+    ubuntu)
+      if [ "$APT_UPDATED" -eq 0 ]; then
+        sudo apt-get update -qq
+        APT_UPDATED=1
+      fi
+      sudo apt-get install -y "$pkg"
+      ;;
     macos)
-      err "zsh should be preinstalled on macOS but isn't. Install Xcode Command Line Tools or run 'brew install zsh' manually."
+      err "'$pkg' is missing on macOS. Install Xcode Command Line Tools: xcode-select --install"
       return 1
       ;;
-    ubuntu)
-      sudo apt-get update -qq && sudo apt-get install -y zsh
-      ;;
     *)
-      err "Automatic zsh install not supported on '$OS'. Install zsh manually and re-run."
+      err "Automatic install of '$pkg' not supported on '$OS'. Install it manually and re-run."
       return 1
       ;;
   esac
 }
 
-if ! need zsh; then
-  warn "zsh is not installed on this $OS system."
-  reply=""
+ensure_bin() {
+  local bin="$1" pkg="${2:-$1}"
+  if need "$bin"; then
+    ok "$bin present"
+    return 0
+  fi
+  warn "$bin is not installed on this $OS system."
+  local reply=""
   if [ -e /dev/tty ]; then
-    printf "Install zsh now? [Y/n] "
+    printf "Install %s now? [Y/n] " "$pkg"
     read -r reply </dev/tty || reply=""
   fi
   case "${reply:-Y}" in
     [nN]|[nN][oO])
-      err "Aborted. zsh is required to continue."
+      err "Aborted. '$bin' is required to continue."
       exit 1
       ;;
   esac
-  info "Installing zsh"
-  install_zsh || exit 1
-fi
-ok "zsh present ($(zsh --version | awk '{print $2}'))"
+  info "Installing $pkg"
+  pkg_install "$pkg" || exit 1
+  if ! need "$bin"; then
+    err "Install of '$pkg' appeared to succeed but '$bin' is still not on PATH."
+    exit 1
+  fi
+  ok "$bin installed"
+}
+
+info "Checking prerequisites"
+ensure_bin curl
+ensure_bin git
+ensure_bin zsh
+ok "zsh version: $(zsh --version | awk '{print $2}')"
 
 # ───────────────────────────────────────────── oh-my-zsh
 
