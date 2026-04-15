@@ -127,8 +127,29 @@ fi
 
 # ───────────────────────────────────────────── default shell
 
-if [ "${SHELL:-}" != "$(command -v zsh)" ]; then
-  warn "Default shell is not zsh. Run: chsh -s \"$(command -v zsh)\""
+info "Setting zsh as default login shell"
+zsh_path="$(command -v zsh)"
+current_shell="$(dscl . -read "$HOME" UserShell 2>/dev/null | awk '{print $2}')"
+[ -z "$current_shell" ] && current_shell="${SHELL:-}"
+
+if [ "$current_shell" = "$zsh_path" ]; then
+  ok "zsh is already the default shell ($zsh_path)"
+else
+  # Ensure zsh is listed in /etc/shells (required by chsh)
+  if [ -w /etc/shells ] && ! grep -qx "$zsh_path" /etc/shells 2>/dev/null; then
+    echo "$zsh_path" >> /etc/shells
+  elif ! grep -qx "$zsh_path" /etc/shells 2>/dev/null; then
+    warn "Adding $zsh_path to /etc/shells (may prompt for sudo)"
+    echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null || \
+      warn "Could not update /etc/shells — you may need to add '$zsh_path' manually"
+  fi
+
+  # chsh reads password from /dev/tty, works even when stdin is piped
+  if chsh -s "$zsh_path" </dev/tty 2>/dev/null; then
+    ok "Default shell changed to zsh — log out and back in (or open a new terminal) to see it"
+  else
+    warn "chsh failed or was skipped. Run manually:  chsh -s \"$zsh_path\""
+  fi
 fi
 
 # ───────────────────────────────────────────── tool summary
