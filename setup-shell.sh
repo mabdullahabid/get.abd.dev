@@ -53,13 +53,13 @@ pkg_install() {
   fi
 }
 
-for bin in curl git; do
+for bin in curl git zsh; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     log "installing $bin"
     pkg_install "$bin"
   fi
 done
-ok "curl + git present"
+ok "curl + git + zsh present"
 
 # --- install chezmoi -------------------------------------------------------
 CHEZMOI_BIN="${HOME}/.local/bin/chezmoi"
@@ -80,7 +80,13 @@ fi
 
 # --- apply dotfiles --------------------------------------------------------
 log "applying dotfiles from github.com/mabdullahabid/dotfiles"
-"$CZ" init --apply mabdullahabid
+# When piped through bash, stdin is the pipe — chezmoi's config prompts
+# need an actual tty. Redirect from /dev/tty if it's available.
+if [ -e /dev/tty ]; then
+  "$CZ" init --apply mabdullahabid </dev/tty
+else
+  "$CZ" init --apply mabdullahabid
+fi
 
 # --- done ------------------------------------------------------------------
 printf '\n%s%sAll set.%s Close and reopen your terminal to start your new zsh.\n' "$BOLD" "$GRN" "$RST"
