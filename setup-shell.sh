@@ -151,8 +151,14 @@ else
   # stdin from /dev/tty so interactive prompts work under curl|bash;
   # stderr stays visible so password prompts aren't hidden.
   change_shell() {
-    if sudo -n chsh -s "$zsh_path" "$USER" >/dev/null 2>&1; then
-      return 0
+    # Probe for passwordless sudo. If it works, use sudo chsh (not -n, so
+    # we still inherit any cached creds and avoid edge cases where -n
+    # rejects commands that would otherwise run fine).
+    if sudo -n true >/dev/null 2>&1; then
+      if sudo chsh -s "$zsh_path" "$USER"; then
+        return 0
+      fi
+      warn "Passwordless sudo worked but 'sudo chsh' failed."
     fi
 
     if [ ! -e /dev/tty ]; then
