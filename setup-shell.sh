@@ -329,12 +329,31 @@ printf "If you have secrets/API keys, put them in %s~/.zshrc.local%s (sourced au
 
 # ───────────────────────────────────────────── hand off to zsh
 #
-# When this script runs under 'curl ... | bash', stdin is the pipe, so
-# simply exec'ing zsh would see EOF and exit immediately. Re-attach stdin
-# to the controlling terminal via /dev/tty so the new zsh is interactive.
-if [ -e /dev/tty ] && [ -t 1 ]; then
-  printf "\n%sLaunching zsh...%s\n" "$c_blue$c_bold" "$c_reset"
-  exec </dev/tty "$(command -v zsh)" -l
-else
-  printf "Start a new shell or run: %sexec zsh%s\n" "$c_bold" "$c_reset"
+# Replace the current bash process with an interactive login zsh. Works
+# under both one-liner forms:
+#
+#   1.  bash -c "$(curl -fsSL https://get.abd.dev/setup-shell.sh)"
+#       → stdin is already the tty, exec zsh just works
+#
+#   2.  curl -fsSL https://get.abd.dev/setup-shell.sh | bash
+#       → bash's stdin is the pipe; we must reattach to /dev/tty first
+#
+# Form #1 is preferred; the pipe form works but requires the /dev/tty
+# dance and some terminal emulators still show minor glitches.
+
+zsh_bin="$(command -v zsh)"
+if [ -z "$zsh_bin" ]; then
+  printf "\nzsh not on PATH — start a new shell manually.\n"
+  exit 0
 fi
+
+if [ ! -e /dev/tty ] || [ ! -t 1 ]; then
+  printf "\nNo TTY detected. Start a new shell or run: %sexec zsh%s\n" "$c_bold" "$c_reset"
+  exit 0
+fi
+
+printf "\n%sLaunching zsh...%s\n" "$c_blue$c_bold" "$c_reset"
+
+# -i forces interactive, -l makes it a login shell (sources ~/.zshrc etc.)
+# Redirect stdin from /dev/tty in case we're being piped.
+exec </dev/tty "$zsh_bin" -il
