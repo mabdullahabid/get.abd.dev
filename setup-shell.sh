@@ -294,7 +294,29 @@ fi
 
 # ───────────────────────────────────────────── tool summary
 
+# Prepend common tool install locations to PATH so the summary below
+# reflects what's actually installed on the system, not just what the
+# minimal bash-under-curl PATH happens to know about. These are the
+# standard dirs that .zshrc / .profile would normally expose once you
+# open a new terminal.
+for dir in \
+  "$HOME/.local/bin" \
+  "$HOME/.cargo/bin" \
+  "$HOME/go/bin" \
+  "/usr/local/go/bin" \
+  "/opt/homebrew/bin" \
+  "/usr/local/bin"; do
+  if [ -d "$dir" ]; then
+    case ":$PATH:" in
+      *":$dir:"*) ;;
+      *) export PATH="$dir:$PATH" ;;
+    esac
+  fi
+done
+
 printf "\n%s=== Installed tools summary ===%s\n" "$c_bold" "$c_reset"
+printf "%sNote:%s checked from this bash process. Anything your ~/.zshrc\n" "$c_yellow" "$c_reset"
+printf "adds to PATH on top of what's below will also be available after reopen.\n\n"
 
 summarize() {
   local name="$1" cmd="$2" ver_args="$3"
