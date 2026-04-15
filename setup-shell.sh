@@ -39,9 +39,61 @@ for bin in curl git; do
 done
 ok "curl, git present"
 
+# ───────────────────────────────────────────── detect OS + install zsh
+
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) echo "macos" ;;
+    Linux)
+      if [ -r /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        case "${ID:-}${ID_LIKE:-}" in
+          *ubuntu*|*debian*) echo "ubuntu" ;;
+          *) echo "linux-other" ;;
+        esac
+      else
+        echo "linux-other"
+      fi
+      ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+OS="$(detect_os)"
+info "Detected system: $OS"
+
+install_zsh() {
+  case "$OS" in
+    macos)
+      err "zsh should be preinstalled on macOS but isn't. Install Xcode Command Line Tools or run 'brew install zsh' manually."
+      return 1
+      ;;
+    ubuntu)
+      sudo apt-get update -qq && sudo apt-get install -y zsh
+      ;;
+    *)
+      err "Automatic zsh install not supported on '$OS'. Install zsh manually and re-run."
+      return 1
+      ;;
+  esac
+}
+
 if ! need zsh; then
-  err "zsh is not installed. Install it first (macOS ships with zsh; on Linux: 'sudo apt install zsh' or equivalent)."
-  exit 1
+  warn "zsh is not installed on this $OS system."
+  reply=""
+  if [ -e /dev/tty ]; then
+    printf "Install zsh now? [Y/n] "
+    read -r reply </dev/tty || reply=""
+  fi
+  case "${reply:-Y}" in
+    [nN]|[nN][oO])
+      err "Aborted. zsh is required to continue."
+      exit 1
+      ;;
+  esac
+  info "Installing zsh"
+  install_zsh || exit 1
 fi
 ok "zsh present ($(zsh --version | awk '{print $2}'))"
 
@@ -208,31 +260,66 @@ summarize() {
   fi
 }
 
-summarize "zsh"      zsh    "--version"
-summarize "git"      git    "--version"
-summarize "curl"     curl   "--version | head -1"
-summarize "docker"   docker "--version"
-summarize "compose"  "docker compose" "version"
-summarize "node"     node   "--version"
-summarize "npm"      npm    "--version"
-summarize "uv"       uv     "--version"
-summarize "python3"  python3 "--version"
-summarize "pip"      pip3   "--version"
-summarize "go"       go     "version"
-summarize "rustc"    rustc  "--version"
-summarize "cargo"    cargo  "--version"
-summarize "entire"   entire "--version"
-summarize "gh"       gh     "--version | head -1"
-summarize "jq"       jq     "--version"
+check_dir() {
+  local name="$1" path="$2" note="$3"
+  if [ -d "$path" ]; then
+    printf "  %s✓%s %-22s %s\n" "$c_green" "$c_reset" "$name" "$note"
+  else
+    printf "  %s✗%s %-22s %s(missing)%s\n" "$c_red" "$c_reset" "$name" "$c_yellow" "$c_reset"
+  fi
+}
 
-# nvm is a shell function, not an executable — check for the file
+printf "%s-- installed by this script --%s\n" "$c_bold" "$c_reset"
+summarize_padded() {
+  local name="$1" cmd="$2" ver_args="$3"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    local v
+    v="$(eval "$cmd $ver_args" 2>/dev/null | head -1)"
+    printf "  %s✓%s %-22s %s\n" "$c_green" "$c_reset" "$name" "$v"
+  else
+    printf "  %s✗%s %-22s %s(not installed)%s\n" "$c_red" "$c_reset" "$name" "$c_yellow" "$c_reset"
+  fi
+}
+summarize_padded "zsh"                  zsh    "--version"
+check_dir        "oh-my-zsh"            "$HOME/.oh-my-zsh" "(framework)"
+check_dir        "powerlevel10k"        "$ZSH_CUSTOM_DIR/themes/powerlevel10k" "(theme)"
+check_dir        "zsh-autosuggestions"  "$ZSH_CUSTOM_DIR/plugins/zsh-autosuggestions" "(plugin)"
+check_dir        "zsh-syntax-highlight" "$ZSH_CUSTOM_DIR/plugins/zsh-syntax-highlighting" "(plugin)"
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
-  printf "  %s✓%s %-14s (sourced from ~/.nvm/nvm.sh)\n" "$c_green" "$c_reset" "nvm"
+  printf "  %s✓%s %-22s %s\n" "$c_green" "$c_reset" "nvm" "(sourced from ~/.nvm/nvm.sh)"
 else
-  printf "  %s✗%s %-14s %s(not installed)%s\n" "$c_red" "$c_reset" "nvm" "$c_yellow" "$c_reset"
+  printf "  %s✗%s %-22s %s(not installed)%s\n" "$c_red" "$c_reset" "nvm" "$c_yellow" "$c_reset"
 fi
+summarize_padded "uv"       uv     "--version"
+summarize_padded "entire"   entire "--version"
 
-printf "\n%sDone.%s Start a new shell or run: %sexec zsh%s\n" \
-  "$c_green$c_bold" "$c_reset" "$c_bold" "$c_reset"
+printf "\n%s-- other common tools --%s\n" "$c_bold" "$c_reset"
+summarize_padded "git"      git    "--version"
+summarize_padded "curl"     curl   "--version | head -1"
+summarize_padded "docker"   docker "--version"
+summarize_padded "compose"  "docker compose" "version"
+summarize_padded "node"     node   "--version"
+summarize_padded "npm"      npm    "--version"
+summarize_padded "python3"  python3 "--version"
+summarize_padded "pip"      pip3   "--version"
+summarize_padded "go"       go     "version"
+summarize_padded "rustc"    rustc  "--version"
+summarize_padded "cargo"    cargo  "--version"
+summarize_padded "gh"       gh     "--version | head -1"
+summarize_padded "jq"       jq     "--version"
+
+printf "\n%sDone.%s\n" "$c_green$c_bold" "$c_reset"
 printf "If you have secrets/API keys, put them in %s~/.zshrc.local%s (sourced automatically, never committed).\n" \
   "$c_bold" "$c_reset"
+
+# ───────────────────────────────────────────── hand off to zsh
+#
+# When this script runs under 'curl ... | bash', stdin is the pipe, so
+# simply exec'ing zsh would see EOF and exit immediately. Re-attach stdin
+# to the controlling terminal via /dev/tty so the new zsh is interactive.
+if [ -e /dev/tty ] && [ -t 1 ]; then
+  printf "\n%sLaunching zsh...%s\n" "$c_blue$c_bold" "$c_reset"
+  exec </dev/tty "$(command -v zsh)" -l
+else
+  printf "Start a new shell or run: %sexec zsh%s\n" "$c_bold" "$c_reset"
+fi
