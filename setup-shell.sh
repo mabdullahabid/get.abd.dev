@@ -144,17 +144,29 @@ else
       warn "Could not update /etc/shells — you may need to add '$zsh_path' manually"
   fi
 
-  # chsh prompts for password on stderr. Don't redirect it or the prompt
-  # becomes invisible. Read stdin from /dev/tty so it works under curl|bash.
-  if [ -e /dev/tty ]; then
-    warn "chsh will prompt for your login password:"
-    if chsh -s "$zsh_path" </dev/tty; then
-      ok "Default shell changed to zsh — open a new terminal to see it"
-    else
-      warn "chsh failed. Run manually:  chsh -s \"$zsh_path\""
+  # chsh needs a password prompt. On macOS and some Linux setups the user's
+  # own password works; on many Linux distros PAM rejects it and sudo is
+  # required. Try unprivileged first, fall back to sudo. stdin must come from
+  # /dev/tty so prompts work under curl|bash, and stderr must stay visible.
+  change_shell() {
+    if [ ! -e /dev/tty ]; then
+      warn "No TTY available for chsh. Run manually:  chsh -s \"$zsh_path\""
+      return 1
     fi
-  else
-    warn "No TTY available for chsh. Run manually:  chsh -s \"$zsh_path\""
+    warn "chsh will prompt for your password:"
+    if chsh -s "$zsh_path" </dev/tty; then
+      return 0
+    fi
+    warn "chsh failed (likely PAM). Retrying with sudo:"
+    if sudo chsh -s "$zsh_path" "$USER" </dev/tty; then
+      return 0
+    fi
+    warn "chsh failed. Run manually:  sudo chsh -s \"$zsh_path\" \"$USER\""
+    return 1
+  }
+
+  if change_shell; then
+    ok "Default shell changed to zsh — open a new terminal to see it"
   fi
 fi
 
