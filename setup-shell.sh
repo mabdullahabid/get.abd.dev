@@ -53,13 +53,13 @@ pkg_install() {
   fi
 }
 
-for bin in curl git zsh; do
+for bin in curl git zsh nano; do
   if ! command -v "$bin" >/dev/null 2>&1; then
     log "installing $bin"
     pkg_install "$bin"
   fi
 done
-ok "curl + git + zsh present"
+ok "curl + git + zsh + nano present"
 
 # --- install chezmoi -------------------------------------------------------
 CHEZMOI_BIN="${HOME}/.local/bin/chezmoi"
