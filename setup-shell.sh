@@ -118,11 +118,20 @@ info "Installing entire CLI"
 if need entire; then
   ok "entire already installed"
 else
-  if curl -fsSL https://entire.dev/install.sh 2>/dev/null | sh >/dev/null 2>&1; then
-    ok "entire installed"
+  # Download to a tempfile first so we can verify the fetch actually
+  # succeeded (piping curl | sh masks a 404 because sh happily runs empty
+  # input and returns 0).
+  entire_tmp="$(mktemp)"
+  if curl -fsSL https://entire.io/install.sh -o "$entire_tmp" && [ -s "$entire_tmp" ]; then
+    if bash "$entire_tmp" >/dev/null 2>&1; then
+      ok "entire installed"
+    else
+      warn "entire install script ran but exited non-zero"
+    fi
   else
-    warn "entire install script not reachable — install manually if needed"
+    warn "entire install script not reachable at https://entire.io/install.sh"
   fi
+  rm -f "$entire_tmp"
 fi
 
 # ───────────────────────────────────────────── default shell
