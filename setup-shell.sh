@@ -144,11 +144,17 @@ else
       warn "Could not update /etc/shells — you may need to add '$zsh_path' manually"
   fi
 
-  # chsh reads password from /dev/tty, works even when stdin is piped
-  if chsh -s "$zsh_path" </dev/tty 2>/dev/null; then
-    ok "Default shell changed to zsh — log out and back in (or open a new terminal) to see it"
+  # chsh prompts for password on stderr. Don't redirect it or the prompt
+  # becomes invisible. Read stdin from /dev/tty so it works under curl|bash.
+  if [ -e /dev/tty ]; then
+    warn "chsh will prompt for your login password:"
+    if chsh -s "$zsh_path" </dev/tty; then
+      ok "Default shell changed to zsh — open a new terminal to see it"
+    else
+      warn "chsh failed. Run manually:  chsh -s \"$zsh_path\""
+    fi
   else
-    warn "chsh failed or was skipped. Run manually:  chsh -s \"$zsh_path\""
+    warn "No TTY available for chsh. Run manually:  chsh -s \"$zsh_path\""
   fi
 fi
 
