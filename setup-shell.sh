@@ -144,20 +144,28 @@ else
       warn "Could not update /etc/shells — you may need to add '$zsh_path' manually"
   fi
 
-  # chsh needs a password prompt. On macOS and some Linux setups the user's
-  # own password works; on many Linux distros PAM rejects it and sudo is
-  # required. Try unprivileged first, fall back to sudo. stdin must come from
-  # /dev/tty so prompts work under curl|bash, and stderr must stay visible.
+  # chsh strategy:
+  #   1. try passwordless sudo (works on orbstack, ci, cloud VMs, etc.)
+  #   2. try plain chsh (works on macOS with user password)
+  #   3. try interactive sudo chsh (works on linux distros needing root)
+  # stdin from /dev/tty so interactive prompts work under curl|bash;
+  # stderr stays visible so password prompts aren't hidden.
   change_shell() {
+    if sudo -n chsh -s "$zsh_path" "$USER" >/dev/null 2>&1; then
+      return 0
+    fi
+
     if [ ! -e /dev/tty ]; then
-      warn "No TTY available for chsh. Run manually:  chsh -s \"$zsh_path\""
+      warn "No TTY available and passwordless sudo not configured."
+      warn "Run manually:  sudo chsh -s \"$zsh_path\" \"$USER\""
       return 1
     fi
+
     warn "chsh will prompt for your password:"
     if chsh -s "$zsh_path" </dev/tty; then
       return 0
     fi
-    warn "chsh failed (likely PAM). Retrying with sudo:"
+    warn "Plain chsh failed. Retrying with sudo:"
     if sudo chsh -s "$zsh_path" "$USER" </dev/tty; then
       return 0
     fi
