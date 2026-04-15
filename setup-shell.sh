@@ -173,6 +173,25 @@ else
   ok "nvm installed"
 fi
 
+# Source nvm into this script so we can install node. nvm is a shell
+# function, not a binary — set NVM_DIR and source nvm.sh.
+export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+
+info "Installing latest LTS node via nvm"
+if command -v nvm >/dev/null 2>&1; then
+  if nvm install --lts >/dev/null 2>&1; then
+    nvm use --lts >/dev/null 2>&1 || true
+    nvm alias default 'lts/*' >/dev/null 2>&1 || true
+    ok "node $(node --version 2>/dev/null) + npm $(npm --version 2>/dev/null)"
+  else
+    warn "nvm install --lts failed"
+  fi
+else
+  warn "nvm not loaded in this shell — run 'nvm install --lts' manually after opening a new terminal"
+fi
+
 info "Installing uv (python package manager)"
 if need uv; then
   ok "uv already installed"
@@ -200,6 +219,18 @@ else
   fi
   rm -f "$entire_tmp"
 fi
+
+# Make uv / entire / anything else in ~/.local/bin visible to the rest
+# of this script (including the summary below) without requiring a new
+# shell. Both installers drop binaries there.
+if [ -d "$HOME/.local/bin" ]; then
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+  esac
+fi
+# shellcheck disable=SC1091
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env" >/dev/null 2>&1 || true
 
 # ───────────────────────────────────────────── default shell
 
@@ -312,7 +343,16 @@ printf "\n%s-- other common tools --%s\n" "$c_bold" "$c_reset"
 summarize_padded "git"      git    "--version"
 summarize_padded "curl"     curl   "--version | head -1"
 summarize_padded "docker"   docker "--version"
-summarize_padded "compose"  "docker compose" "version"
+
+# Docker Compose is a subcommand, not a standalone binary — check
+# separately by actually running `docker compose version`.
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  cv="$(docker compose version --short 2>/dev/null || docker compose version 2>/dev/null | head -1)"
+  printf "  %s✓%s %-22s Docker Compose v%s\n" "$c_green" "$c_reset" "compose" "$cv"
+else
+  printf "  %s✗%s %-22s %s(not installed)%s\n" "$c_red" "$c_reset" "compose" "$c_yellow" "$c_reset"
+fi
+
 summarize_padded "node"     node   "--version"
 summarize_padded "npm"      npm    "--version"
 summarize_padded "python3"  python3 "--version"
@@ -323,37 +363,8 @@ summarize_padded "cargo"    cargo  "--version"
 summarize_padded "gh"       gh     "--version | head -1"
 summarize_padded "jq"       jq     "--version"
 
-printf "\n%sDone.%s\n" "$c_green$c_bold" "$c_reset"
-printf "If you have secrets/API keys, put them in %s~/.zshrc.local%s (sourced automatically, never committed).\n" \
+printf "\n%sDone.%s\n\n" "$c_green$c_bold" "$c_reset"
+printf "%sNext step:%s close this terminal and open a new one.\n" "$c_bold" "$c_reset"
+printf "Your new shell will be zsh with powerlevel10k, and all PATH changes will be active.\n\n"
+printf "If you have secrets/API keys, put them in %s~/.zshrc.local%s — sourced automatically, never committed.\n" \
   "$c_bold" "$c_reset"
-
-# ───────────────────────────────────────────── hand off to zsh
-#
-# Replace the current bash process with an interactive login zsh. Works
-# under both one-liner forms:
-#
-#   1.  bash -c "$(curl -fsSL https://get.abd.dev/setup-shell.sh)"
-#       → stdin is already the tty, exec zsh just works
-#
-#   2.  curl -fsSL https://get.abd.dev/setup-shell.sh | bash
-#       → bash's stdin is the pipe; we must reattach to /dev/tty first
-#
-# Form #1 is preferred; the pipe form works but requires the /dev/tty
-# dance and some terminal emulators still show minor glitches.
-
-zsh_bin="$(command -v zsh)"
-if [ -z "$zsh_bin" ]; then
-  printf "\nzsh not on PATH — start a new shell manually.\n"
-  exit 0
-fi
-
-if [ ! -e /dev/tty ] || [ ! -t 1 ]; then
-  printf "\nNo TTY detected. Start a new shell or run: %sexec zsh%s\n" "$c_bold" "$c_reset"
-  exit 0
-fi
-
-printf "\n%sLaunching zsh...%s\n" "$c_blue$c_bold" "$c_reset"
-
-# -i forces interactive, -l makes it a login shell (sources ~/.zshrc etc.)
-# Redirect stdin from /dev/tty in case we're being piped.
-exec </dev/tty "$zsh_bin" -il
