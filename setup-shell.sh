@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # abd.dev — zsh + oh-my-zsh + powerlevel10k bootstrap
-# One-liner: curl -fsSL https://get.abd.dev/setup-shell.sh | bash
+# One-liner:
+#   curl -fsSL https://get.abd.dev/setup-shell.sh | bash
 #
 # Platform-agnostic (macOS + Linux). Does not install Homebrew or system pkgs
 # beyond what's strictly required. Safe to re-run (idempotent).
